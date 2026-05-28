@@ -29,7 +29,9 @@ func init() {
 
 	rootCmd.PersistentFlags().Int("billing-cycle", 1, "First day of your billing cycle, e.g. 15")
 
-	rootCmd.PersistentFlags().String("report-path", "./reports", "Path where the Excel-File will be generated (path will be generated recursively if it does not exist)")
+	rootCmd.PersistentFlags().String("report-path", "./reports", "Path where the report will be generated (path will be generated recursively if it does not exist)")
+
+	rootCmd.PersistentFlags().Bool("csv", false, "Output in CSV format instead of Excel")
 }
 
 var rootCmd = &cobra.Command{
@@ -43,6 +45,7 @@ var rootCmd = &cobra.Command{
 		githubToken, _ := cmd.Flags().GetString("github-token")
 		enterprise, _ := cmd.Flags().GetString("enterprise")
 		reportPath, _ := cmd.Flags().GetString("report-path")
+		csvOutput, _ := cmd.Flags().GetBool("csv")
 
 		inputCycle := InputCycle{
 			Year:         givenYear,
@@ -76,11 +79,19 @@ var rootCmd = &cobra.Command{
 		// ensure the reportPath exists
 		err = os.MkdirAll(reportPath, os.ModePerm)
 
-		excelFileName := filepath.Join(reportPath, fmt.Sprintf("GitHub_Usage_%s.xlsx", billingCycle.GetDateRangeAsString()))
+		filePrefix := fmt.Sprintf("GitHub_Usage_%s", billingCycle.GetDateRangeAsString())
 
-		err = GenerateExcel(excelFileName, orgReport)
-		if err != nil {
-			log.Fatalf("Error while generating Excel-File: \n%s\n", err)
+		if csvOutput {
+			err = GenerateCSV(reportPath, filePrefix, orgReport)
+			if err != nil {
+				log.Fatalf("Error while generating CSV files: \n%s\n", err)
+			}
+		} else {
+			excelFileName := filepath.Join(reportPath, filePrefix+".xlsx")
+			err = GenerateExcel(excelFileName, orgReport)
+			if err != nil {
+				log.Fatalf("Error while generating Excel file: \n%s\n", err)
+			}
 		}
 
 		log.Printf("Report generated at %s\n", reportPath)

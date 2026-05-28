@@ -1,6 +1,6 @@
 # GH Billing Report
 
-A command line tool to use GitHub's new [Enhanced Enterprise Billing Usage Report APIs](https://docs.github.com/en/enterprise-cloud@latest/rest/enterprise-admin/billing?apiVersion=2022-11-28#get-billing-usage-report-for-an-enterprise) to export an Excel-Report with the usage for a given Billing-Cycle, grouped and aggregated by organization.
+A command line tool to use GitHub's new [Enhanced Enterprise Billing Usage Report APIs](https://docs.github.com/en/enterprise-cloud@latest/rest/enterprise-admin/billing?apiVersion=2022-11-28#get-billing-usage-report-for-an-enterprise) to export an Excel or CSV report with the usage for a given billing cycle, grouped and aggregated by organization.
 
 ![Screenshot of an Excel File containing a Billing Report by Organization](./docs/images/org-report.png)
 
@@ -13,7 +13,7 @@ The easiest way to use this tool is to install it as a [GitHub CLI](https://cli.
 1. Install the extension:
 
     ```bash
-    gh extension install davelosert/gh-billing-report
+    gh extension install nmoa/gh-billing-report
     ```
 
 2. Create a [classical GitHub PAT](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic) with the scopes `manage_billing:enterprise` and `read:enterprise`
@@ -24,7 +24,7 @@ The easiest way to use this tool is to install it as a [GitHub CLI](https://cli.
     gh billing-report --enterprise my-enterprise --github-token $GITHUB_TOKEN
     ```
 
-    This will generate a report for the current running calendar month and save it to the `./reports` folder of the current working directory. See the [Options Section below](#options) for more information on how to customize the report.
+    This will generate an Excel report for the current running calendar month and save it to the `./reports` folder of the current working directory. See the [Options Section below](#options) for more information on how to customize the report.
 
 ### Using the repo directly
 
@@ -47,7 +47,8 @@ gh billing-report --github-token <github-token> \
   --year <year> \
   --month <month> \
   --billing-cycle <billing-cycle> \
-  --report-path <report-path>
+  --report-path <report-path> \
+  --csv
 ```
 
 The `GITHUB_TOKEN` will be automatically read from the Environment-Variable, but can be overwritten using the `--github-token` flag.
@@ -60,6 +61,7 @@ The `GITHUB_TOKEN` will be automatically read from the Environment-Variable, but
 | `--month <month>`                 | Specify the month, e.g. 1                                           | Current month | None                 |
 | `--billing-cycle <billing-cycle>` | First day of your billing cycle (see below for further information) | 1             | None                 |
 | `--report-path <report-path>`     | Directory where the report will be saved                            | `./reports`   | None                 |
+| `--csv`                           | Output in CSV format instead of Excel                               | `false`       | None                 |
 
 ### Billing Cycle
 
@@ -90,7 +92,7 @@ You need to create a [classical GitHub PAT](https://docs.github.com/en/authentic
 
 ## Output
 
-Currently, the output is an Excel file containing the two sheets:
+By default, the output is an Excel file containing the two sheets:
 
 - **Usage by Organization**: Contains the aggregated usage by organization where:
   - **Gross Amount**: The gross amount of the usage
@@ -98,6 +100,13 @@ Currently, the output is an Excel file containing the two sheets:
   - **Net Amount**: The net amount of the usage - this is what you will be billed
 - **Detail Usage**: Contains all usage items of the billing cycle you specified so you can drill down into the data
     ![Screenshot of the Detail Usage Sheet](./docs/images/usage-details.png)
+
+### CSV Output
+
+When using the `--csv` flag, two CSV files are generated instead of an Excel file:
+
+- `GitHub_Usage_<date-range>_summary.csv`: Organization-level summary (same data as the "Usage by Organization" sheet)
+- `GitHub_Usage_<date-range>_details.csv`: All usage items (same data as the "Detail Usage" sheet)
 
 ## License
 
