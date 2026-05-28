@@ -2,6 +2,8 @@
 
 A command line tool to use GitHub's new [Enhanced Enterprise Billing Usage Report APIs](https://docs.github.com/en/enterprise-cloud@latest/rest/enterprise-admin/billing?apiVersion=2022-11-28#get-billing-usage-report-for-an-enterprise) to export an Excel or CSV report with the usage for a given billing cycle, grouped and aggregated by organization.
 
+This is a fork of [davelosert/gh-billing-report](https://github.com/davelosert/gh-billing-report).
+
 ![Screenshot of an Excel File containing a Billing Report by Organization](./docs/images/org-report.png)
 
 ## Getting Started
