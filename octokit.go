@@ -43,7 +43,7 @@ func NewOctokit(client *api.RESTClient) *Octokit {
 func (octokit *Octokit) CreateReport(ctx context.Context, enterprise string, req CreateReportRequest) (*ReportExport, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("レポート生成リクエストの JSON 化に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to marshal report creation request: %w", err)
 	}
 
 	url := fmt.Sprintf("enterprises/%s/settings/billing/reports", enterprise)

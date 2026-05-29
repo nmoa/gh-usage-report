@@ -78,21 +78,21 @@ func newRootCmd(deps commandDependencies) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:          "gh billing-report",
-		Short:        "Usage Reports API から billing report CSV を取得します",
+		Short:        "Download billing report CSV files from the Usage Reports API",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRootCommand(cmd, deps)
 		},
 	}
 
-	cmd.Flags().String("github-token", "", "GitHub トークン。未指定時は GITHUB_TOKEN を使用")
+	cmd.Flags().String("github-token", "", "GitHub token. Uses GITHUB_TOKEN when omitted")
 	cmd.Flags().String("enterprise", "", "Enterprise slug")
-	cmd.Flags().Int("year", currentYear, "対象年")
-	cmd.Flags().Int("month", currentMonth, "対象月")
-	cmd.Flags().Int("billing-cycle", 1, "請求サイクル開始日")
-	cmd.Flags().String("report-path", defaultReportPath, "CSV の出力先ディレクトリ")
-	cmd.Flags().String("report-type", reportTypeBoth, "レポート種別: detailed, summarized, both")
-	cmd.Flags().Int("timeout", defaultTimeout, "ポーリングのタイムアウト秒数")
+	cmd.Flags().Int("year", currentYear, "Target year")
+	cmd.Flags().Int("month", currentMonth, "Target month")
+	cmd.Flags().Int("billing-cycle", 1, "Billing cycle start day")
+	cmd.Flags().String("report-path", defaultReportPath, "Output directory for CSV files")
+	cmd.Flags().String("report-type", reportTypeBoth, "Report type: detailed, summarized, both")
+	cmd.Flags().Int("timeout", defaultTimeout, "Polling timeout in seconds")
 	_ = cmd.MarkFlagRequired("enterprise")
 
 	return cmd
@@ -110,7 +110,7 @@ func runRootCommand(cmd *cobra.Command, deps commandDependencies) error {
 
 	restClient, err := deps.newRESTClient(options.githubToken, io.Discard)
 	if err != nil {
-		return fmt.Errorf("API クライアントの初期化に失敗しました: %w", err)
+		return fmt.Errorf("failed to initialize API client: %w", err)
 	}
 
 	return run(cmd.Context(), deps, logger, NewOctokit(restClient), options)
@@ -143,7 +143,7 @@ func readCommandOptions(cmd *cobra.Command) (commandOptions, error) {
 		return commandOptions{}, err
 	}
 	if timeoutSeconds <= 0 {
-		return commandOptions{}, fmt.Errorf("--timeout は 1 以上を指定してください")
+		return commandOptions{}, fmt.Errorf("--timeout must be 1 or greater")
 	}
 
 	year, err := cmd.Flags().GetInt("year")
@@ -181,7 +181,7 @@ func run(ctx context.Context, deps commandDependencies, logger *log.Logger, repo
 	}
 
 	if err := deps.mkdirAll(options.reportPath, os.ModePerm); err != nil {
-		return fmt.Errorf("出力先ディレクトリの作成に失敗しました: %w", err)
+		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
 	for _, currentReportType := range reportTypes {
@@ -204,18 +204,18 @@ func createAndSaveReport(ctx context.Context, deps commandDependencies, logger *
 		EndDate:    options.billingCycle.GetEndDateString(),
 	})
 	if err != nil {
-		return fmt.Errorf("%s レポート生成に失敗しました。Enterprise administration 権限を確認してください: %w", reportType, err)
+		return fmt.Errorf("failed to create %s report. Check Enterprise administration permissions: %w", reportType, err)
 	}
 	if report.ID == "" {
-		return fmt.Errorf("%s レポート生成結果に report ID が含まれていません", reportType)
+		return fmt.Errorf("%s report response did not include a report ID", reportType)
 	}
 
 	completedReport, err := waitForCompletion(ctx, reportClient, options.enterprise, report.ID, options.timeout, deps.pollInterval, logger)
 	if err != nil {
-		return fmt.Errorf("%s レポートの完了待機に失敗しました: %w", reportType, err)
+		return fmt.Errorf("failed while waiting for %s report completion: %w", reportType, err)
 	}
 	if len(completedReport.DownloadURLs) == 0 {
-		return fmt.Errorf("%s レポートは completed になりましたが download_urls が空です", reportType)
+		return fmt.Errorf("%s report completed but download_urls was empty", reportType)
 	}
 
 	for index, url := range completedReport.DownloadURLs {
@@ -232,13 +232,13 @@ func createAndSaveReport(ctx context.Context, deps commandDependencies, logger *
 			downloadSpinner.Stop()
 		}
 		if err != nil {
-			return fmt.Errorf("%s レポートのダウンロードに失敗しました: %w", reportType, err)
+			return fmt.Errorf("failed to download %s report: %w", reportType, err)
 		}
 		logger.Print(buildDownloadedReportMessage(reportType, index, len(completedReport.DownloadURLs)))
 
 		outputPath := filepath.Join(options.reportPath, buildFilename(options.enterprise, options.billingCycle, reportType, index, len(completedReport.DownloadURLs)))
 		if err := deps.writeFile(outputPath, csvData, outputFilePermission); err != nil {
-			return fmt.Errorf("CSV ファイルの書き込みに失敗しました: %w", err)
+			return fmt.Errorf("failed to write CSV file: %w", err)
 		}
 		logger.Printf("Saved: %s", outputPath)
 	}
@@ -266,7 +266,7 @@ func waitForCompletion(ctx context.Context, reportClient ReportClient, enterpris
 	for {
 		report, err := reportClient.GetReport(timeoutContext, enterprise, reportID)
 		if err != nil {
-			return nil, fmt.Errorf("レポート状態の取得に失敗しました: %w", err)
+			return nil, fmt.Errorf("failed to fetch report status: %w", err)
 		}
 
 		switch report.Status {
@@ -278,7 +278,7 @@ func waitForCompletion(ctx context.Context, reportClient ReportClient, enterpris
 			logger.Print(buildReportCompletedMessage(time.Since(start)))
 			return report, nil
 		case "failed":
-			return nil, fmt.Errorf("レポート生成が failed になりました")
+			return nil, fmt.Errorf("report generation failed")
 		}
 
 		progressMessage := buildReportWaitingMessage(time.Since(start))
@@ -292,7 +292,7 @@ func waitForCompletion(ctx context.Context, reportClient ReportClient, enterpris
 		select {
 		case <-timeoutContext.Done():
 			timer.Stop()
-			return nil, fmt.Errorf("%s 秒以内にレポートが完了しませんでした", timeout.Round(time.Second))
+			return nil, fmt.Errorf("report did not complete within %s", timeout.Round(time.Second))
 		case <-timer.C:
 		}
 	}
@@ -355,7 +355,7 @@ func determineReportTypes(reportType string) ([]string, error) {
 	case reportTypeBoth:
 		return []string{reportTypeDetailed, reportTypeSummarized}, nil
 	default:
-		return nil, fmt.Errorf("--report-type は detailed, summarized, both のいずれかを指定してください")
+		return nil, fmt.Errorf("--report-type must be one of: detailed, summarized, both")
 	}
 }
 

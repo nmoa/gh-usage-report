@@ -51,7 +51,7 @@ func TestDetermineReportTypes_InvalidType(t *testing.T) {
 
 	require.Error(t, err)
 	require.Nil(t, result)
-	require.EqualError(t, err, "--report-type は detailed, summarized, both のいずれかを指定してください")
+	require.EqualError(t, err, "--report-type must be one of: detailed, summarized, both")
 }
 
 // TestBuildFilename は CSV 出力ファイル名の組み立てを検証します。
