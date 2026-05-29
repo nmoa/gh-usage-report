@@ -1,103 +1,374 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/briandowns/spinner"
 	"github.com/cli/go-gh/v2/pkg/api"
-
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
-func init() {
-	rootCmd.PersistentFlags().String("github-token", "", "Github token")
-	viper.BindPFlag("github-token", rootCmd.PersistentFlags().Lookup("github-token"))
-	viper.BindEnv("github-token", "GITHUB_TOKEN")
+const (
+	defaultReportPath    = "./reports"
+	defaultTimeout       = 300
+	defaultPollInterval  = 5 * time.Second
+	reportTypeDetailed   = "detailed"
+	reportTypeSummarized = "summarized"
+	reportTypeBoth       = "both"
+	outputFilePermission = 0o644
+)
 
-	rootCmd.PersistentFlags().String("enterprise", "", "Enterprise name")
-	rootCmd.MarkPersistentFlagRequired("enterprise")
+// ReportClient は Usage Reports API を呼び出す抽象です。
+type ReportClient interface {
+	CreateReport(ctx context.Context, enterprise string, req CreateReportRequest) (*ReportExport, error)
+	GetReport(ctx context.Context, enterprise string, reportID string) (*ReportExport, error)
+}
 
+// CSVDownloader は CSV ダウンロード処理を抽象化します。
+type CSVDownloader interface {
+	Download(ctx context.Context, url string) ([]byte, error)
+}
+
+// commandDependencies は副作用を持つ依存をまとめます。
+type commandDependencies struct {
+	newRESTClient func(authToken string, logOutput io.Writer) (*api.RESTClient, error)
+	downloader    CSVDownloader
+	pollInterval  time.Duration
+	mkdirAll      func(path string, perm os.FileMode) error
+	writeFile     func(name string, data []byte, perm os.FileMode) error
+}
+
+// commandOptions は CLI から受け取る実行オプションです。
+type commandOptions struct {
+	githubToken  string
+	enterprise   string
+	reportType   string
+	reportPath   string
+	timeout      time.Duration
+	billingCycle *BillingCycle
+}
+
+// newDefaultDependencies は本番実行用の依存を構築します。
+func newDefaultDependencies() commandDependencies {
+	return commandDependencies{
+		newRESTClient: func(authToken string, logOutput io.Writer) (*api.RESTClient, error) {
+			return api.NewRESTClient(api.ClientOptions{
+				AuthToken: authToken,
+				Log:       logOutput,
+			})
+		},
+		downloader:   NewHTTPDownloader(httpDefaultClient),
+		pollInterval: defaultPollInterval,
+		mkdirAll:     os.MkdirAll,
+		writeFile:    os.WriteFile,
+	}
+}
+
+// newRootCmd は CLI エントリーポイントを構築します。
+func newRootCmd(deps commandDependencies) *cobra.Command {
 	currentYear := time.Now().Year()
-	rootCmd.PersistentFlags().Int("year", currentYear, "Specify the year, e.g. 2024")
-
 	currentMonth := int(time.Now().Month())
-	rootCmd.PersistentFlags().Int("month", currentMonth, "Specify the month, e.g. 1")
 
-	rootCmd.PersistentFlags().Int("billing-cycle", 1, "First day of your billing cycle, e.g. 15")
+	cmd := &cobra.Command{
+		Use:          "gh billing-report",
+		Short:        "Usage Reports API から billing report CSV を取得します",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRootCommand(cmd, deps)
+		},
+	}
 
-	rootCmd.PersistentFlags().String("report-path", "./reports", "Path where the report will be generated (path will be generated recursively if it does not exist)")
+	cmd.Flags().String("github-token", "", "GitHub トークン。未指定時は GITHUB_TOKEN を使用")
+	cmd.Flags().String("enterprise", "", "Enterprise slug")
+	cmd.Flags().Int("year", currentYear, "対象年")
+	cmd.Flags().Int("month", currentMonth, "対象月")
+	cmd.Flags().Int("billing-cycle", 1, "請求サイクル開始日")
+	cmd.Flags().String("report-path", defaultReportPath, "CSV の出力先ディレクトリ")
+	cmd.Flags().String("report-type", reportTypeBoth, "レポート種別: detailed, summarized, both")
+	cmd.Flags().Int("timeout", defaultTimeout, "ポーリングのタイムアウト秒数")
+	_ = cmd.MarkFlagRequired("enterprise")
 
-	rootCmd.PersistentFlags().Bool("csv", false, "Output in CSV format instead of Excel")
+	return cmd
 }
 
-var rootCmd = &cobra.Command{
-	Use:   "gh billing-export",
-	Short: "Generate a Billing Report",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
-		givenYear, _ := cmd.Flags().GetInt("year")
-		givenMonth, _ := cmd.Flags().GetInt("month")
-		givenBillingCycle, _ := cmd.Flags().GetInt("billing-cycle")
-		githubToken, _ := cmd.Flags().GetString("github-token")
-		enterprise, _ := cmd.Flags().GetString("enterprise")
-		reportPath, _ := cmd.Flags().GetString("report-path")
-		csvOutput, _ := cmd.Flags().GetBool("csv")
+// runRootCommand は CLI オプションを解釈して実行フローを開始します。
+func runRootCommand(cmd *cobra.Command, deps commandDependencies) error {
+	options, err := readCommandOptions(cmd)
+	if err != nil {
+		return err
+	}
 
-		inputCycle := InputCycle{
-			Year:         givenYear,
-			Month:        givenMonth,
-			BillingCycle: givenBillingCycle,
+	logger := log.New(cmd.ErrOrStderr(), "", 0)
+	logger.Printf("Reporting range: %s", options.billingCycle.GetDateRangeAsString())
+
+	restClient, err := deps.newRESTClient(options.githubToken, io.Discard)
+	if err != nil {
+		return fmt.Errorf("API クライアントの初期化に失敗しました: %w", err)
+	}
+
+	return run(cmd.Context(), deps, logger, NewOctokit(restClient), options)
+}
+
+// readCommandOptions は CLI フラグから実行オプションを組み立てます。
+func readCommandOptions(cmd *cobra.Command) (commandOptions, error) {
+	githubToken, err := cmd.Flags().GetString("github-token")
+	if err != nil {
+		return commandOptions{}, err
+	}
+	if githubToken == "" {
+		githubToken = os.Getenv("GITHUB_TOKEN")
+	}
+
+	enterprise, err := cmd.Flags().GetString("enterprise")
+	if err != nil {
+		return commandOptions{}, err
+	}
+	reportType, err := cmd.Flags().GetString("report-type")
+	if err != nil {
+		return commandOptions{}, err
+	}
+	reportPath, err := cmd.Flags().GetString("report-path")
+	if err != nil {
+		return commandOptions{}, err
+	}
+	timeoutSeconds, err := cmd.Flags().GetInt("timeout")
+	if err != nil {
+		return commandOptions{}, err
+	}
+	if timeoutSeconds <= 0 {
+		return commandOptions{}, fmt.Errorf("--timeout は 1 以上を指定してください")
+	}
+
+	year, err := cmd.Flags().GetInt("year")
+	if err != nil {
+		return commandOptions{}, err
+	}
+	month, err := cmd.Flags().GetInt("month")
+	if err != nil {
+		return commandOptions{}, err
+	}
+	billingCycleDay, err := cmd.Flags().GetInt("billing-cycle")
+	if err != nil {
+		return commandOptions{}, err
+	}
+
+	return commandOptions{
+		githubToken: githubToken,
+		enterprise:  enterprise,
+		reportType:  reportType,
+		reportPath:  reportPath,
+		timeout:     time.Duration(timeoutSeconds) * time.Second,
+		billingCycle: NewBillingCycle(InputCycle{
+			Year:         year,
+			Month:        month,
+			BillingCycle: billingCycleDay,
+		}),
+	}, nil
+}
+
+// run は Usage Reports API を使って CSV を取得し保存します。
+func run(ctx context.Context, deps commandDependencies, logger *log.Logger, reportClient ReportClient, options commandOptions) error {
+	reportTypes, err := determineReportTypes(options.reportType)
+	if err != nil {
+		return err
+	}
+
+	if err := deps.mkdirAll(options.reportPath, os.ModePerm); err != nil {
+		return fmt.Errorf("出力先ディレクトリの作成に失敗しました: %w", err)
+	}
+
+	for _, currentReportType := range reportTypes {
+		if err := createAndSaveReport(ctx, deps, logger, reportClient, options, currentReportType); err != nil {
+			return err
 		}
-		billingCycle := NewBillingCycle(inputCycle)
+	}
 
-		log.Printf("Date Range: %s\n", billingCycle.GetDateRangeAsString())
+	logger.Printf("Saved reports to %s", options.reportPath)
+	return nil
+}
 
-		opts := api.ClientOptions{
-			AuthToken: githubToken, // Replace with valid auth token.
-			Log:       os.Stdout,
-		}
+// createAndSaveReport は 1 種類のレポートを生成し、完了待ちと保存までを行います。
+func createAndSaveReport(ctx context.Context, deps commandDependencies, logger *log.Logger, reportClient ReportClient, options commandOptions, reportType string) error {
+	logger.Printf("Generating %s report", reportType)
 
-		client, _ := api.NewRESTClient(opts)
-		octokit := Octokit{client}
+	report, err := reportClient.CreateReport(ctx, options.enterprise, CreateReportRequest{
+		ReportType: reportType,
+		StartDate:  options.billingCycle.GetStartDateString(),
+		EndDate:    options.billingCycle.GetEndDateString(),
+	})
+	if err != nil {
+		return fmt.Errorf("%s レポート生成に失敗しました。Enterprise administration 権限を確認してください: %w", reportType, err)
+	}
+	if report.ID == "" {
+		return fmt.Errorf("%s レポート生成結果に report ID が含まれていません", reportType)
+	}
 
-		allUsageItems, err := octokit.getUsageItemsForDates(enterprise, billingCycle.GetRequiredAPIDateRange())
+	completedReport, err := waitForCompletion(ctx, reportClient, options.enterprise, report.ID, options.timeout, deps.pollInterval, logger)
+	if err != nil {
+		return fmt.Errorf("%s レポートの完了待機に失敗しました: %w", reportType, err)
+	}
+	if len(completedReport.DownloadURLs) == 0 {
+		return fmt.Errorf("%s レポートは completed になりましたが download_urls が空です", reportType)
+	}
 
-		if err != nil {
-			log.Fatal("Error while getting usageItems from API. Make sure you have provided a GITHUB_TOKEN with the scopes 'manage_billing:enterprise' and 'read:enterprise'.\nOriginal error:\n", err)
-		}
-
-		// Filter usage Items using the billing_cycle IsInDateRange method
-		relevantUsageItems := FilterUsageItems(allUsageItems, billingCycle.IsInDateRange)
-		log.Printf("Found %d usageItems of which %d are in given Billing-Cycle\n", len(allUsageItems), len(relevantUsageItems))
-
-		orgReport := NewOrganizationReport(relevantUsageItems)
-
-		// ensure the reportPath exists
-		err = os.MkdirAll(reportPath, os.ModePerm)
-
-		filePrefix := fmt.Sprintf("GitHub_Usage_%s", billingCycle.GetDateRangeAsString())
-
-		if csvOutput {
-			err = GenerateCSV(reportPath, filePrefix, orgReport)
-			if err != nil {
-				log.Fatalf("Error while generating CSV files: \n%s\n", err)
-			}
+	for index, url := range completedReport.DownloadURLs {
+		downloadingMessage := buildDownloadingReportMessage(reportType, index, len(completedReport.DownloadURLs))
+		downloadSpinner, useSpinner := newProgressSpinner(logger.Writer(), downloadingMessage)
+		if useSpinner {
+			downloadSpinner.Start()
 		} else {
-			excelFileName := filepath.Join(reportPath, filePrefix+".xlsx")
-			err = GenerateExcel(excelFileName, orgReport)
-			if err != nil {
-				log.Fatalf("Error while generating Excel file: \n%s\n", err)
-			}
+			logger.Print(downloadingMessage)
 		}
 
-		log.Printf("Report generated at %s\n", reportPath)
-	},
+		csvData, err := deps.downloader.Download(ctx, url)
+		if useSpinner {
+			downloadSpinner.Stop()
+		}
+		if err != nil {
+			return fmt.Errorf("%s レポートのダウンロードに失敗しました: %w", reportType, err)
+		}
+		logger.Print(buildDownloadedReportMessage(reportType, index, len(completedReport.DownloadURLs)))
+
+		outputPath := filepath.Join(options.reportPath, buildFilename(options.enterprise, options.billingCycle, reportType, index, len(completedReport.DownloadURLs)))
+		if err := deps.writeFile(outputPath, csvData, outputFilePermission); err != nil {
+			return fmt.Errorf("CSV ファイルの書き込みに失敗しました: %w", err)
+		}
+		logger.Printf("Saved: %s", outputPath)
+	}
+
+	return nil
 }
 
+// waitForCompletion はレポートが completed になるまでポーリングします。
+func waitForCompletion(ctx context.Context, reportClient ReportClient, enterprise string, reportID string, timeout time.Duration, pollInterval time.Duration, logger *log.Logger) (*ReportExport, error) {
+	timeoutContext, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	start := time.Now()
+	progressSpinner, useSpinner := newProgressSpinner(logger.Writer(), buildReportWaitingMessage(0))
+	progressStarted := useSpinner
+	if progressStarted {
+		progressSpinner.Start()
+	}
+	defer func() {
+		if progressStarted {
+			progressSpinner.Stop()
+		}
+	}()
+
+	for {
+		report, err := reportClient.GetReport(timeoutContext, enterprise, reportID)
+		if err != nil {
+			return nil, fmt.Errorf("レポート状態の取得に失敗しました: %w", err)
+		}
+
+		switch report.Status {
+		case "completed":
+			if progressStarted {
+				progressSpinner.Stop()
+				progressStarted = false
+			}
+			logger.Print(buildReportCompletedMessage(time.Since(start)))
+			return report, nil
+		case "failed":
+			return nil, fmt.Errorf("レポート生成が failed になりました")
+		}
+
+		progressMessage := buildReportWaitingMessage(time.Since(start))
+		if progressStarted {
+			progressSpinner.Suffix = buildSpinnerSuffix(progressMessage)
+		} else {
+			logger.Print(progressMessage)
+		}
+
+		timer := time.NewTimer(pollInterval)
+		select {
+		case <-timeoutContext.Done():
+			timer.Stop()
+			return nil, fmt.Errorf("%s 秒以内にレポートが完了しませんでした", timeout.Round(time.Second))
+		case <-timer.C:
+		}
+	}
+}
+
+// newProgressSpinner は進捗表示用の spinner を構築し、利用可否を返します。
+func newProgressSpinner(writer io.Writer, message string) (*spinner.Spinner, bool) {
+	writerFile, ok := writer.(*os.File)
+	if !ok || !isInteractiveWriter(writerFile) {
+		return nil, false
+	}
+
+	progressSpinner := spinner.New(spinner.CharSets[11], 100*time.Millisecond, spinner.WithWriterFile(writerFile))
+	progressSpinner.Suffix = buildSpinnerSuffix(message)
+	return progressSpinner, true
+}
+
+// isInteractiveWriter は spinner を安全に表示できる端末かを判定します。
+func isInteractiveWriter(writerFile *os.File) bool {
+	writerInfo, err := writerFile.Stat()
+	if err != nil {
+		return false
+	}
+
+	return writerInfo.Mode()&os.ModeCharDevice != 0
+}
+
+// buildSpinnerSuffix は spinner に表示する接尾辞を組み立てます。
+func buildSpinnerSuffix(message string) string {
+	return " " + message
+}
+
+// buildReportWaitingMessage はレポート完了待ち中の表示文言を返します。
+func buildReportWaitingMessage(elapsed time.Duration) string {
+	return fmt.Sprintf("Waiting for report completion... (%s elapsed)", elapsed.Round(time.Second))
+}
+
+// buildReportCompletedMessage はレポート完了時の表示文言を返します。
+func buildReportCompletedMessage(elapsed time.Duration) string {
+	return fmt.Sprintf("Report completed after %s.", elapsed.Round(time.Second))
+}
+
+// buildDownloadingReportMessage はダウンロード中の表示文言を返します。
+func buildDownloadingReportMessage(reportType string, index int, total int) string {
+	return fmt.Sprintf("Downloading %s report file %d/%d...", reportType, index+1, total)
+}
+
+// buildDownloadedReportMessage はダウンロード完了時の表示文言を返します。
+func buildDownloadedReportMessage(reportType string, index int, total int) string {
+	return fmt.Sprintf("Downloaded %s report file %d/%d.", reportType, index+1, total)
+}
+
+// determineReportTypes は CLI 入力から実行対象のレポート種別を返します。
+func determineReportTypes(reportType string) ([]string, error) {
+	switch strings.ToLower(reportType) {
+	case reportTypeDetailed:
+		return []string{reportTypeDetailed}, nil
+	case reportTypeSummarized:
+		return []string{reportTypeSummarized}, nil
+	case reportTypeBoth:
+		return []string{reportTypeDetailed, reportTypeSummarized}, nil
+	default:
+		return nil, fmt.Errorf("--report-type は detailed, summarized, both のいずれかを指定してください")
+	}
+}
+
+// buildFilename は保存先の CSV ファイル名を組み立てます。
+func buildFilename(enterprise string, billingCycle *BillingCycle, reportType string, index int, total int) string {
+	fileName := fmt.Sprintf("GitHub_Usage_%s_%s_%s", enterprise, billingCycle.GetDateRangeAsString(), reportType)
+	if total > 1 && index > 0 {
+		return fmt.Sprintf("%s_%d.csv", fileName, index+1)
+	}
+	return fileName + ".csv"
+}
+
+// main は CLI を実行します。
 func main() {
-	cobra.CheckErr(rootCmd.Execute())
+	cobra.CheckErr(newRootCmd(newDefaultDependencies()).Execute())
 }

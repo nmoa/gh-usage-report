@@ -4,8 +4,6 @@ A command line tool to use GitHub's new [Enhanced Enterprise Billing Usage Repor
 
 This is a fork of [davelosert/gh-billing-report](https://github.com/davelosert/gh-billing-report).
 
-![Screenshot of an Excel File containing a Billing Report by Organization](./docs/images/org-report.png)
-
 ## Getting Started
 
 ### Using the GH Extension
@@ -38,6 +36,25 @@ go run . --enterprise my-enterprise --github-token $GITHUB_TOKEN
 
 > [!NOTE]
 > This requires you to have [Go](https://golang.org/) >1.21.5 installed on your machine.
+
+### Using a Dev Container
+
+This repository includes a Dev Container configuration for working in an isolated environment with Go 1.24 and GitHub CLI preinstalled.
+
+1. Open the repository in VS Code.
+2. Run `Dev Containers: Reopen in Container`.
+3. Inside the container, authenticate GitHub CLI if needed:
+
+   ```bash
+   gh auth login
+   ```
+
+4. Start working with the project:
+
+   ```bash
+   go test ./...
+   go run . --enterprise my-enterprise --github-token $GITHUB_TOKEN
+   ```
 
 ## Options
 
@@ -107,8 +124,8 @@ By default, the output is an Excel file containing the two sheets:
 
 When using the `--csv` flag, two CSV files are generated instead of an Excel file:
 
-- `GitHub_Usage_<date-range>_summary.csv`: Organization-level summary (same data as the "Usage by Organization" sheet)
-- `GitHub_Usage_<date-range>_details.csv`: All usage items (same data as the "Detail Usage" sheet)
+- `GitHub_Usage_<enterprise-slug>_<date-range>_summarized.csv`: Organization-level summary (same data as the "Usage by Organization" sheet)
+- `GitHub_Usage_<enterprise-slug>_<date-range>_detailed.csv`: All usage items (same data as the "Detail Usage" sheet)
 
 ## License
 
