@@ -1,131 +1,207 @@
 # GH Billing Report
 
-A command line tool to use GitHub's new [Enhanced Enterprise Billing Usage Report APIs](https://docs.github.com/en/enterprise-cloud@latest/rest/enterprise-admin/billing?apiVersion=2022-11-28#get-billing-usage-report-for-an-enterprise) to export an Excel or CSV report with the usage for a given billing cycle, grouped and aggregated by organization.
+`gh billing-report` downloads enterprise usage report CSV files from GitHub's [Usage Reports API](https://docs.github.com/en/enterprise-cloud@latest/rest/billing/usage-reports?apiVersion=2022-11-28) and can re-aggregate downloaded CSVs by organization, cost center, or user.
 
-This is a fork of [davelosert/gh-billing-report](https://github.com/davelosert/gh-billing-report).
+This repository is a fork of [davelosert/gh-billing-report](https://github.com/davelosert/gh-billing-report).
 
-## Getting Started
+## Features
 
-### Using the GH Extension
+- Download `detailed`, `summarized`, or `both` usage report CSVs for an enterprise billing cycle.
+- Calculate the report date range from `--year`, `--month`, and `--billing-cycle`.
+- Poll GitHub's asynchronous export API and download every returned CSV file.
+- Re-aggregate an existing usage CSV into product-specific CSVs grouped by `org`, `cost_center`, or `user`.
 
-The easiest way to use this tool is to install it as a [GitHub CLI](https://cli.github.com/) Extension.
+## Installation
 
-1. Install the extension:
-
-    ```bash
-    gh extension install nmoa/gh-billing-report
-    ```
-
-2. Create a [classical GitHub PAT](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic) with the scopes `manage_billing:enterprise` and `read:enterprise`
-
-3. Generate the report:
-
-    ```bash
-    gh billing-report --enterprise my-enterprise --github-token $GITHUB_TOKEN
-    ```
-
-    This will generate an Excel report for the current running calendar month and save it to the `./reports` folder of the current working directory. See the [Options Section below](#options) for more information on how to customize the report.
-
-### Using the repo directly
-
-You can also clone this repo and run the following commands:
+### GitHub CLI extension
 
 ```bash
-go run . --enterprise my-enterprise --github-token $GITHUB_TOKEN
+gh extension install nmoa/gh-billing-report
 ```
 
-> [!NOTE]
-> This requires you to have [Go](https://golang.org/) >1.21.5 installed on your machine.
-
-### Using a Dev Container
-
-This repository includes a Dev Container configuration for working in an isolated environment with Go 1.24 and GitHub CLI preinstalled.
-
-1. Open the repository in VS Code.
-2. Run `Dev Containers: Reopen in Container`.
-3. Inside the container, authenticate GitHub CLI if needed:
-
-   ```bash
-   gh auth login
-   ```
-
-4. Start working with the project:
-
-   ```bash
-   go test ./...
-   go run . --enterprise my-enterprise --github-token $GITHUB_TOKEN
-   ```
-
-## Options
-
-All options can be set as flags via the command line:
+### Run from source
 
 ```bash
-gh billing-report --github-token <github-token> \
-  --enterprise <enterprise-slug> \
-  --year <year> \
-  --month <month> \
-  --billing-cycle <billing-cycle> \
-  --report-path <report-path> \
-  --csv
+git clone https://github.com/nmoa/gh-billing-report.git
+cd gh-billing-report
+go test ./...
+go run . --help
 ```
 
-The `GITHUB_TOKEN` will be automatically read from the Environment-Variable, but can be overwritten using the `--github-token` flag.
+This project requires Go 1.24 or later.
 
-| Option                            | Description                                                         | Default Value | Environment Variable |
-| --------------------------------- | ------------------------------------------------------------------- | ------------- | -------------------- |
-| `--github-token <github-token>`   | Github token, see below for permissions                             | None          | `GITHUB_TOKEN`       |
-| `--enterprise <enterprise-slug>`  | Enterprise Slug to get the data from                                | None          | None                 |
-| `--year <year>`                   | Specify the year, e.g. 2024                                         | Current year  | None                 |
-| `--month <month>`                 | Specify the month, e.g. 1                                           | Current month | None                 |
-| `--billing-cycle <billing-cycle>` | First day of your billing cycle (see below for further information) | 1             | None                 |
-| `--report-path <report-path>`     | Directory where the report will be saved                            | `./reports`   | None                 |
-| `--csv`                           | Output in CSV format instead of Excel                               | `false`       | None                 |
+### Dev Container
 
-### Billing Cycle
+This repository includes a Dev Container with Go 1.24 and GitHub CLI preinstalled.
 
-By default, the generated report covers an entire calendar month (e.g., `1st of January` to `31st of January`).
+```bash
+go test ./...
+go run . --help
+```
 
-You can customize this range using the `--billing-cycle` option, which sets the start day of your billing cycle. The report will then cover the period
+## Authentication
 
-- from the specified **billing cycle day of the input month**
-- to the day **before the same billing cycle day of the following month**
+The authenticated user must be an enterprise admin or billing manager.
 
-If the given billing cycle day does not exist in the given month, the first day of the next month will be used. See the following examples:
+GitHub currently documents these Usage Reports API endpoints for:
 
-| Input                                      | Report Period                                     |
-| ------------------------------------------ | ------------------------------------------------- |
-| `--year 2024 --month 1 --billing-cycle 1`  | `1st of January 2024` to `31st of January 2024`   |
-| `--year 2024 --month 1 --billing-cycle 15` | `15th of January 2024` to `14th of February 2024` |
-| `--year 2024 --month 2 --billing-cycle 30` | `1st of March 2024` to `29th of March 2024`       |
+- Fine-grained personal access tokens
+- GitHub App user access tokens
+- GitHub App installation access tokens
 
-> [!IMPORTANT]
-> Please note that all cutoff dates are in UTC. Therefore, a report with `--year 2024 --month 1 --billing-cycle 15` will include all usage data from `15th of January 2024 00:00:00 UTC` to `14th of February 2024 23:59:59 UTC`.
+For a fine-grained personal access token, grant `Enterprise administration` enterprise permissions with `write` access.
 
-### Github Token Permissions
+You can pass the token explicitly or use the `GITHUB_TOKEN` environment variable.
 
-You need to create a [classical GitHub PAT](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic) with the following Scopes:
+```bash
+export GITHUB_TOKEN=<your-token>
+gh billing-report --enterprise my-enterprise
+```
 
-- `manage_billing:enterprise`
-- `read:enterprise`
+## Download usage reports
 
-## Output
+Generate usage report CSV files for a billing cycle:
 
-By default, the output is an Excel file containing the two sheets:
+```bash
+gh billing-report --enterprise my-enterprise
+```
 
-- **Usage by Organization**: Contains the aggregated usage by organization where:
-  - **Gross Amount**: The gross amount of the usage
-  - **Discount**: The discount applied to the usage
-  - **Net Amount**: The net amount of the usage - this is what you will be billed
-- **Detail Usage**: Contains all usage items of the billing cycle you specified so you can drill down into the data
-    ![Screenshot of the Detail Usage Sheet](./docs/images/usage-details.png)
+Run from source:
 
-### CSV Output
+```bash
+go run . --enterprise my-enterprise
+```
 
-When using the `--csv` flag, two CSV files are generated instead of an Excel file:
+Example with explicit options:
 
-- `GitHub_Usage_<enterprise-slug>_<date-range>_summarized.csv`: Organization-level summary (same data as the "Usage by Organization" sheet)
-- `GitHub_Usage_<enterprise-slug>_<date-range>_detailed.csv`: All usage items (same data as the "Detail Usage" sheet)
+```bash
+gh billing-report \
+  --enterprise my-enterprise \
+  --year 2026 \
+  --month 4 \
+  --billing-cycle 1 \
+  --report-type both \
+  --report-path ./reports \
+  --timeout 300
+```
+
+### Download command options
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `--github-token` | GitHub token. Uses `GITHUB_TOKEN` when omitted. | none |
+| `--enterprise` | Enterprise slug. | required |
+| `--year` | Target year. | current year |
+| `--month` | Target month. | current month |
+| `--billing-cycle` | First day of the billing cycle. | `1` |
+| `--report-path` | Output directory for downloaded CSV files. | `./reports` |
+| `--report-type` | Report type: `detailed`, `summarized`, or `both`. | `both` |
+| `--timeout` | Polling timeout in seconds. | `300` |
+
+### Billing cycle behavior
+
+By default, the report covers a calendar month.
+
+When `--billing-cycle` is set, the tool calculates the range as:
+
+- Start: the billing cycle day in the requested month
+- End: the day before the same billing cycle day in the following month
+
+If the billing cycle day does not exist in the requested month, the first day of the next month is used.
+
+| Input | Report period |
+| --- | --- |
+| `--year 2024 --month 1 --billing-cycle 1` | `2024-01-01` to `2024-01-31` |
+| `--year 2024 --month 1 --billing-cycle 15` | `2024-01-15` to `2024-02-14` |
+| `--year 2024 --month 2 --billing-cycle 30` | `2024-03-01` to `2024-03-29` |
+
+All cutoff dates are interpreted in UTC.
+
+### Download output
+
+The download command writes one or more CSV files to `--report-path`.
+
+Typical output files:
+
+- `GitHub_Usage_<enterprise>_<start>_to_<end>_detailed.csv`
+- `GitHub_Usage_<enterprise>_<start>_to_<end>_summarized.csv`
+
+If GitHub returns multiple download URLs for the same report type, the second and later files receive a numeric suffix:
+
+- `GitHub_Usage_<enterprise>_<start>_to_<end>_detailed_2.csv`
+
+## Aggregate downloaded CSV files
+
+Use the `aggregate` subcommand to create product-specific summary CSVs from an existing usage export.
+
+```bash
+gh billing-report aggregate --input reports/GitHub_Usage_my-enterprise_2026-04-01_to_2026-04-30_summarized.csv --group-by org
+```
+
+Run from source:
+
+```bash
+go run . aggregate --input reports/GitHub_Usage_my-enterprise_2026-04-01_to_2026-04-30_detailed.csv --group-by user
+```
+
+### Aggregate command options
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `--input` | Input usage CSV file. | required |
+| `--group-by` | Grouping key: `org`, `cost_center`, or `user`. | required |
+| `--output-dir` | Parent directory for aggregate CSV output. | `.` |
+
+### Aggregate behavior
+
+- `summarized` CSV files support `org` and `cost_center` grouping.
+- `detailed` CSV files support `org`, `cost_center`, and `user` grouping.
+- `--group-by user` fails for `summarized` CSV files because they do not contain a `username` column.
+- Empty grouping values are emitted as `(unassigned)`.
+- `ratio` is the share of each row's `net_amount` within the total `net_amount` of the same product.
+
+For an input file named `GitHub_Usage_my-enterprise_2026-04-01_to_2026-04-30_summarized.csv`, the aggregate command writes output into:
+
+```text
+<output-dir>/GitHub_Usage_my-enterprise_2026-04-01_to_2026-04-30/
+```
+
+Each product becomes its own CSV file:
+
+- `actions_by_org.csv`
+- `copilot_by_org.csv`
+- `ghas_by_org.csv`
+
+Each aggregate CSV contains:
+
+- Group key (`org`, `cost_center`, or `user`)
+- `gross_amount`
+- `discount_amount`
+- `net_amount`
+- `ratio`
+
+Example:
+
+```csv
+org,gross_amount,discount_amount,net_amount,ratio
+org-a,12,2,10,0.666667
+org-b,6,1,5,0.333333
+```
+
+## Development
+
+Run the test suite:
+
+```bash
+go test ./...
+```
+
+Try the commands locally:
+
+```bash
+go run . --enterprise my-enterprise --year 2026 --month 4
+go run . aggregate --input reports/GitHub_Usage_my-enterprise_2026-04-01_to_2026-04-30_detailed.csv --group-by org
+```
 
 ## License
 

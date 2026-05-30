@@ -7,6 +7,8 @@ GitHub Enterprise の Usage Reports API を利用して、billing の usage repo
 ## 満たすべきフィーチャー
 
 - Usage Reports API を利用して enterprise の billing report CSV を取得できること
+- ダウンロード済みの Usage CSV を `org` `cost_center` `user` 単位で再集計できること
+- 再集計結果を product ごとの CSV として出力できること
 - 対象期間を `--year` `--month` `--billing-cycle` から計算できること
 - `detailed` `summarized` `both` の各レポート種別を扱えること
 - 完了待ちのポーリングと CSV ダウンロード進捗を CLI で表示できること
@@ -24,6 +26,7 @@ GitHub Enterprise の Usage Reports API を利用して、billing の usage repo
 
 ```
 gh billing-report --enterprise <slug> [options]
+gh billing-report aggregate --input <path> --group-by <org|cost_center|user> [options]
 ```
 
 ## CLIオプション
@@ -38,6 +41,23 @@ gh billing-report --enterprise <slug> [options]
 | `--report-path` | CSV出力先ディレクトリ | `./reports` |
 | `--report-type` | レポート種別 (`detailed`, `summarized`, `both`) | `both` |
 | `--timeout` | ポーリングタイムアウト (秒) | 300 |
+
+## aggregate サブコマンド
+
+ダウンロード済み CSV を読み込み、product ごとに再集計した CSV を出力する。
+
+- `summarized` CSV は `org` `cost_center` 集計に対応すること
+- `detailed` CSV は `org` `cost_center` `user` 集計に対応すること
+- 出力ディレクトリは入力ファイル名から `_detailed` `_summarized` を除いた名前にすること
+- 出力ファイル名は `{product}_by_{grouping}.csv` 形式にすること
+
+### aggregate CLIオプション
+
+| オプション | 説明 | デフォルト |
+|---|---|---|
+| `--input` | 入力 CSV ファイルパス (必須) | - |
+| `--group-by` | 集計単位 (`org`, `cost_center`, `user`) | - |
+| `--output-dir` | 集計 CSV の親ディレクトリ | `.` |
 
 ## 処理フロー
 

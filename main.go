@@ -73,6 +73,11 @@ func newDefaultDependencies() commandDependencies {
 
 // newRootCmd は CLI エントリーポイントを構築します。
 func newRootCmd(deps commandDependencies) *cobra.Command {
+	return newRootCmdWithAggregateDependencies(deps, newDefaultAggregateDependencies())
+}
+
+// newRootCmdWithAggregateDependencies は CLI エントリーポイントを構築します。
+func newRootCmdWithAggregateDependencies(deps commandDependencies, aggregateDeps aggregateCommandDependencies) *cobra.Command {
 	currentYear := time.Now().Year()
 	currentMonth := int(time.Now().Month())
 
@@ -94,6 +99,7 @@ func newRootCmd(deps commandDependencies) *cobra.Command {
 	cmd.Flags().String("report-type", reportTypeBoth, "Report type: detailed, summarized, both")
 	cmd.Flags().Int("timeout", defaultTimeout, "Polling timeout in seconds")
 	_ = cmd.MarkFlagRequired("enterprise")
+	cmd.AddCommand(newAggregateCmd(aggregateDeps))
 
 	return cmd
 }
