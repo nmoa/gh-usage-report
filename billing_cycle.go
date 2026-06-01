@@ -1,4 +1,4 @@
-// Package main は gh billing-report CLI を提供します。
+// Package main は gh usage-report CLI を提供します。
 package main
 
 import (

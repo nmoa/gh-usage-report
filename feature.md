@@ -1,4 +1,4 @@
-# gh-billing-report 機能仕様
+# gh-usage-report 機能仕様
 
 ## 概要
 
@@ -25,8 +25,8 @@ GitHub Enterprise の Usage Reports API を利用して、billing の usage repo
 ## コマンド
 
 ```
-gh billing-report --enterprise <slug> [options]
-gh billing-report aggregate --input <path> --group-by <org|cost_center|user> [--sort-by <net_amount|name>] [options]
+gh usage-report --enterprise <slug> [options]
+gh usage-report aggregate --input <path> --group-by <org|cost_center|user> [--sort-by <net_amount|name>] [options]
 ```
 
 ## CLIオプション

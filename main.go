@@ -82,7 +82,7 @@ func newRootCmdWithAggregateDependencies(deps commandDependencies, aggregateDeps
 	currentMonth := int(time.Now().Month())
 
 	cmd := &cobra.Command{
-		Use:          "gh billing-report",
+		Use:          "gh usage-report",
 		Short:        "Download billing report CSV files from the Usage Reports API",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

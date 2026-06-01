@@ -227,4 +227,4 @@ feature.md           — 機能仕様
 4. Step 4: `main.go` 書き換え
 5. Step 5: `go mod tidy`
 6. Step 6: テスト追加
-7. 動作確認: `go build && gh billing-report --enterprise enterprise-slug --year 2026 --month 4`
+7. 動作確認: `go build && gh usage-report --enterprise enterprise-slug --year 2026 --month 4`

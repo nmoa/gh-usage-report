@@ -1,4 +1,4 @@
-// Package main provides the gh billing-report CLI and CSV aggregation helpers.
+// Package main provides the gh usage-report CLI and CSV aggregation helpers.
 package main
 
 import (

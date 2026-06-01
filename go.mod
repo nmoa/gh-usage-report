@@ -1,4 +1,4 @@
-module github.com/nmoa/gh-billing-report
+module github.com/nmoa/gh-usage-report
 
 go 1.24.0
 

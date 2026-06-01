@@ -1,8 +1,8 @@
-# GH Billing Report
+# GH Usage Report
 
-`gh billing-report` downloads enterprise usage report CSV files from GitHub's [Usage Reports API](https://docs.github.com/en/enterprise-cloud@latest/rest/billing/usage-reports?apiVersion=2022-11-28) and can re-aggregate downloaded CSVs by organization, cost center, or user, ordered by net amount or name.
+`gh usage-report` downloads enterprise usage report CSV files from GitHub's [Usage Reports API](https://docs.github.com/en/enterprise-cloud@latest/rest/billing/usage-reports?apiVersion=2022-11-28) and can re-aggregate downloaded CSVs by organization, cost center, or user, ordered by net amount or name.
 
-This repository is a fork of [davelosert/gh-billing-report](https://github.com/davelosert/gh-billing-report).
+This repository is originally forked from [davelosert/gh-billing-report](https://github.com/davelosert/gh-billing-report).
 
 ## Features
 
@@ -16,14 +16,14 @@ This repository is a fork of [davelosert/gh-billing-report](https://github.com/d
 ### GitHub CLI extension
 
 ```bash
-gh extension install nmoa/gh-billing-report
+gh extension install nmoa/gh-usage-report
 ```
 
 ### Run from source
 
 ```bash
-git clone https://github.com/nmoa/gh-billing-report.git
-cd gh-billing-report
+git clone https://github.com/nmoa/gh-usage-report.git
+cd gh-usage-report
 go test ./...
 go run . --help
 ```
@@ -55,7 +55,7 @@ You can pass the token explicitly or use the `GITHUB_TOKEN` environment variable
 
 ```bash
 export GITHUB_TOKEN=<your-token>
-gh billing-report --enterprise my-enterprise
+gh usage-report --enterprise my-enterprise
 ```
 
 ## Download usage reports
@@ -63,7 +63,7 @@ gh billing-report --enterprise my-enterprise
 Generate usage report CSV files for a billing cycle:
 
 ```bash
-gh billing-report --enterprise my-enterprise
+gh usage-report --enterprise my-enterprise
 ```
 
 Run from source:
@@ -75,7 +75,7 @@ go run . --enterprise my-enterprise
 Example with explicit options:
 
 ```bash
-gh billing-report \
+gh usage-report \
   --enterprise my-enterprise \
   --year 2026 \
   --month 4 \
@@ -135,13 +135,13 @@ If GitHub returns multiple download URLs for the same report type, the second an
 Use the `aggregate` subcommand to create product-specific summary CSVs from an existing usage export.
 
 ```bash
-gh billing-report aggregate --input reports/GitHub_Usage_my-enterprise_2026-04-01_to_2026-04-30_summarized.csv --group-by org
+gh usage-report aggregate --input reports/GitHub_Usage_my-enterprise_2026-04-01_to_2026-04-30_summarized.csv --group-by org
 ```
 
 Sort by group name instead of net amount:
 
 ```bash
-gh billing-report aggregate --input reports/GitHub_Usage_my-enterprise_2026-04-01_to_2026-04-30_summarized.csv --group-by org --sort-by name
+gh usage-report aggregate --input reports/GitHub_Usage_my-enterprise_2026-04-01_to_2026-04-30_summarized.csv --group-by org --sort-by name
 ```
 
 Run from source:
