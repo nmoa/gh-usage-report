@@ -1,3 +1,4 @@
+// Package main は gh billing-report CLI を提供します。
 package main
 
 import (
@@ -5,12 +6,14 @@ import (
 	"time"
 )
 
+// InputCycle は CLI から受け取る請求サイクル条件です。
 type InputCycle struct {
 	Year         int
 	Month        int
 	BillingCycle int
 }
 
+// DateRange は請求期間の開始日と終了日を表します。
 type DateRange struct {
 	Start time.Time
 	End   time.Time
@@ -18,48 +21,38 @@ type DateRange struct {
 
 const OUTPUT_FORMAT = "2006-01-02"
 
+// BillingCycle は解決済みの請求期間を保持します。
 type BillingCycle struct {
 	dateRange DateRange
 }
 
+// NewBillingCycle は CLI 入力から請求期間を構築します。
 func NewBillingCycle(inputCycle InputCycle) *BillingCycle {
 	dateRange := GetRequiredDateRange(inputCycle)
 	return &BillingCycle{dateRange: dateRange}
 }
 
-func (bc *BillingCycle) GetRequiredAPIDateRange() []APIDate {
-	if bc.dateRange.Start.Month() == bc.dateRange.End.Month() {
-		return []APIDate{ConvertDateToApiDate(bc.dateRange.Start)}
-	}
-
-	start := ConvertDateToApiDate(bc.dateRange.Start)
-	end := ConvertDateToApiDate(bc.dateRange.End)
-	return []APIDate{start, end}
-}
-
+// GetDateRange は請求期間の開始時刻と終了時刻を返します。
 func (bc *BillingCycle) GetDateRange() (time.Time, time.Time) {
 	return bc.dateRange.Start, bc.dateRange.End
 }
 
+// GetStartDateString は API リクエスト向けの開始日文字列を返します。
+func (bc *BillingCycle) GetStartDateString() string {
+	return bc.dateRange.Start.Format(OUTPUT_FORMAT)
+}
+
+// GetEndDateString は API リクエスト向けの終了日文字列を返します。
+func (bc *BillingCycle) GetEndDateString() string {
+	return bc.dateRange.End.Format(OUTPUT_FORMAT)
+}
+
+// GetDateRangeAsString は出力ファイル名向けの期間文字列を返します。
 func (bc *BillingCycle) GetDateRangeAsString() string {
-	start := bc.dateRange.Start.Format(OUTPUT_FORMAT)
-	end := bc.dateRange.End.Format(OUTPUT_FORMAT)
-	return fmt.Sprintf("%s_to_%s", start, end)
+	return fmt.Sprintf("%s_to_%s", bc.GetStartDateString(), bc.GetEndDateString())
 }
 
-func (bc *BillingCycle) IsInDateRange(usageItem UsageItem) bool {
-	usageItemDate, _ := time.Parse(time.RFC3339, usageItem.Date)
-	return (usageItemDate.After(bc.dateRange.Start) || usageItemDate.Equal(bc.dateRange.Start)) && (usageItemDate.Before(bc.dateRange.End) ||
-		usageItemDate.Equal(bc.dateRange.End))
-}
-
-func ConvertDateToApiDate(date time.Time) APIDate {
-	return APIDate{
-		Year:  date.Year(),
-		Month: int(date.Month()),
-	}
-}
-
+// GetRequiredDateRange は入力条件から請求期間を計算します。
 func GetRequiredDateRange(inputCycle InputCycle) DateRange {
 	if inputCycle.BillingCycle == 1 {
 		startOfMonth := startOfMonth(inputCycle.Year, inputCycle.Month)
@@ -78,23 +71,28 @@ func GetRequiredDateRange(inputCycle InputCycle) DateRange {
 	return DateRange{Start: start, End: end}
 }
 
+// endOfDay は指定日の末尾時刻を UTC で返します。
 func endOfDay(year, month, day int) time.Time {
 	return time.Date(year, time.Month(month), day, 23, 59, 59, 0, time.UTC)
 }
 
+// startOfDay は指定日の開始時刻を UTC で返します。
 func startOfDay(year, month, day int) time.Time {
 	return time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
 }
 
+// endOfMonth は指定月の末尾時刻を UTC で返します。
 func endOfMonth(year int, month int) time.Time {
 	firstOfMonth := endOfDay(year, month, 1)
 	return firstOfMonth.AddDate(0, 1, -1)
 }
 
+// startOfMonth は指定月の開始時刻を UTC で返します。
 func startOfMonth(year, month int) time.Time {
 	return time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
 }
 
+// isExists は指定した日付がその月に存在するかを返します。
 func isExists(year int, month int, day int) bool {
 	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
 	return t.Day() == day

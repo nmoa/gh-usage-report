@@ -1,11 +1,13 @@
 package main
 
 import (
-	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
+// TestBillingCycle_GetDateRange は請求期間の境界を検証します。
 func TestBillingCycle_GetDateRange(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -56,111 +58,79 @@ func TestBillingCycle_GetDateRange(t *testing.T) {
 			bc := NewBillingCycle(tt.input)
 			resultStart, resultEnd := bc.GetDateRange()
 
-			expectedStart, _ := time.Parse(time.RFC3339, tt.expectedStart)
-			expectedEnd, _ := time.Parse(time.RFC3339, tt.expectedEnd)
+			expectedStart, err := time.Parse(time.RFC3339, tt.expectedStart)
+			require.NoError(t, err)
+			expectedEnd, err := time.Parse(time.RFC3339, tt.expectedEnd)
+			require.NoError(t, err)
 
-			if !resultStart.Equal(expectedStart) || !resultEnd.Equal(expectedEnd) {
-				t.Errorf("Expected\n start: %v, end: %v, but got\n start: %v, end: %v", expectedStart, expectedEnd, resultStart, resultEnd)
-			}
+			require.Equal(t, expectedStart, resultStart)
+			require.Equal(t, expectedEnd, resultEnd)
 		})
 	}
 }
 
-func TestGetRequiredAPIDateRange(t *testing.T) {
+// TestBillingCycle_GetStartDateString は API 用開始日文字列を検証します。
+func TestBillingCycle_GetStartDateString(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    InputCycle
-		expected []APIDate
+		expected string
 	}{
 		{
-			name:  "if billing cycle is 1, returns only the given year and month",
-			input: InputCycle{Year: 2022, Month: 5, BillingCycle: 1},
-			expected: []APIDate{
-				{Year: 2022, Month: 5},
-			},
+			name:     "if billing cycle is 1, returns the first day of the given month",
+			input:    InputCycle{Year: 2022, Month: 5, BillingCycle: 1},
+			expected: "2022-05-01",
 		},
 		{
-			name:  "if billing cycle is > 1, returns the given and the next month",
-			input: InputCycle{Year: 2022, Month: 5, BillingCycle: 2},
-			expected: []APIDate{
-				{Year: 2022, Month: 5},
-				{Year: 2022, Month: 6},
-			},
+			name:     "if billing cycle is greater than 1, returns the billing cycle start day",
+			input:    InputCycle{Year: 2022, Month: 5, BillingCycle: 2},
+			expected: "2022-05-02",
 		},
 		{
-			name:  "if billing cycle is > 1 and month is 12, returns the first month of the next year",
-			input: InputCycle{Year: 2021, Month: 12, BillingCycle: 2},
-			expected: []APIDate{
-				{Year: 2021, Month: 12},
-				{Year: 2022, Month: 1},
-			},
-		},
-		{
-			name:  "if billing cycle day is 31 and month is 2 (February), only returns March",
-			input: InputCycle{Year: 2024, Month: 2, BillingCycle: 31},
-			expected: []APIDate{
-				{Year: 2024, Month: 3},
-			},
+			name:     "if billing cycle day does not exist, returns the first day of the next month",
+			input:    InputCycle{Year: 2024, Month: 2, BillingCycle: 31},
+			expected: "2024-03-01",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			bc := NewBillingCycle(tt.input)
-			result := bc.GetRequiredAPIDateRange()
-			if !reflect.DeepEqual(result, tt.expected) {
-				t.Errorf("Expected %v, but got %v", tt.expected, result)
-			}
+			result := bc.GetStartDateString()
+			require.Equal(t, tt.expected, result)
 		})
 	}
 }
 
-func TestIsInDateRange(t *testing.T) {
+// TestBillingCycle_GetEndDateString は API 用終了日文字列を検証します。
+func TestBillingCycle_GetEndDateString(t *testing.T) {
 	tests := []struct {
-		name      string
-		usageItem UsageItem
-		input     InputCycle
-		expected  bool
+		name     string
+		input    InputCycle
+		expected string
 	}{
 		{
-			name:      "if billing cycle is 1 and usageItem is in same month, return true",
-			usageItem: UsageItem{Date: "2022-05-15T00:00:00Z"},
-			input:     InputCycle{Year: 2022, Month: 5, BillingCycle: 1},
-			expected:  true,
+			name:     "if billing cycle is 1, returns the last day of the given month",
+			input:    InputCycle{Year: 2022, Month: 5, BillingCycle: 1},
+			expected: "2022-05-31",
 		},
 		{
-			name:      "if billing cycle is 1 and usageItem is in different month, return false",
-			usageItem: UsageItem{Date: "2022-06-01T00:00:00Z"},
-			input:     InputCycle{Year: 2022, Month: 5, BillingCycle: 1},
-			expected:  false,
+			name:     "if billing cycle is greater than 1, returns the day before the next cycle",
+			input:    InputCycle{Year: 2022, Month: 5, BillingCycle: 2},
+			expected: "2022-06-01",
 		},
 		{
-			name:      "if billing cycle is > 1 and usageItem is within the same month, return true",
-			usageItem: UsageItem{Date: "2022-05-15T00:00:00Z"},
-			input:     InputCycle{Year: 2022, Month: 5, BillingCycle: 2},
-			expected:  true,
-		},
-		{
-			name:      "usage item is exactly at start of billing cycle, return true",
-			usageItem: UsageItem{Date: "2022-05-02T00:00:00Z"},
-			input:     InputCycle{Year: 2022, Month: 5, BillingCycle: 2},
-			expected:  true,
-		},
-		{
-			name:      "usage item is exactly at end of billing cycle, return true",
-			usageItem: UsageItem{Date: "2022-06-01T23:59:59Z"},
-			input:     InputCycle{Year: 2022, Month: 5, BillingCycle: 2},
-			expected:  true,
+			name:     "if billing cycle day does not exist, returns the last day before that cycle in the next month",
+			input:    InputCycle{Year: 2024, Month: 2, BillingCycle: 31},
+			expected: "2024-03-30",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			bc := NewBillingCycle(tt.input)
-			result := bc.IsInDateRange(tt.usageItem)
-			if result != tt.expected {
-				t.Errorf("Expected %v for UsageItem.Date %v to be in range of input-cycle %v, but got %v", tt.expected, tt.usageItem.Date, tt.input, result)
-			}
+			result := bc.GetEndDateString()
+			require.Equal(t, tt.expected, result)
 		})
 	}
 }

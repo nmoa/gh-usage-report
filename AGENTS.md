@@ -1,48 +1,26 @@
 # AGENTS.md
 
-## Project Overview
+## ドキュメントについて
 
-`gh-billing-report` is a GitHub CLI extension that generates Excel billing reports for GitHub Enterprise. It fetches usage data from the GitHub Enterprise Billing API and exports it as an `.xlsx` file.
+- コンソール出力など、ユーザーが見る部分の出力は英語で記載すること
+- README.md以外のドキュメントは日本語で記載すること
+- 絵文字は使わないこと
+- 全ての関数、構造体、インターフェース、パッケージの上にコメントを簡潔に記述すること
+- コードから読み取れない仕様の背景があれば、コメントに記載すること
+- 満たすべきフィーチャーをfeature.mdに箇条書きで記載すること
 
-## Build & Test
+## 実装について
 
-```bash
-# Build
-go build ./...
+- 副作用のある処理と副作用がない純粋関数に分離すること
 
-# Run all tests
-go test ./...
-```
+## テストについて
 
-There is no linter configured in this repository.
-
-## Architecture
-
-This is a single-package Go application (`package main`) with the following structure:
-
-| File | Responsibility |
-|------|---------------|
-| `main.go` | CLI entry point using cobra/viper for flags and configuration |
-| `octokit.go` | GitHub REST API client wrapper (uses `github.com/cli/go-gh/v2`) |
-| `billing_cycle.go` | Date range calculation for billing cycles |
-| `usage_item.go` | Data model for usage items and filtering |
-| `organization_report.go` | Aggregation logic (group by org, compute totals) |
-| `excel_export.go` | Excel file generation using excelize |
-
-## Key Dependencies
-
-- `github.com/cli/go-gh/v2` — GitHub CLI Go library for API access
-- `github.com/spf13/cobra` / `github.com/spf13/viper` — CLI framework
-- `github.com/xuri/excelize/v2` — Excel file generation
-
-## Conventions
-
-- All source files are in the root directory (flat structure, single package).
-- Tests are in `*_test.go` files alongside the source.
-- The API client (`Octokit`) uses the `gh` CLI's built-in authentication via `go-gh`.
-- No external HTTP calls are made outside of the GitHub Enterprise Billing API.
-
-## CI/CD
-
-- **Test**: Runs `go test .` on push/PR to `main` (`.github/workflows/test.yml`)
-- **Release**: Uses `cli/gh-extension-precompile@v2` on tag push (`.github/workflows/release.yml`)
+- 純粋関数の全てに単体テストを用意すること
+- テストにif文を使わないこと
+- テストケースとなる入力と期待値を愚直に定義し、入力に対する関数の出力が期待値と一致するかどうか、というシンプルなテストにすること
+- テストケースとなる入力は、ユースケースとしてありうるパターンを網羅すること
+- 読みやすいテストにすること
+- 満たすべきフィーチャー１つに対して、最低１つの結合テストを用意すること
+- want の検証で十分に仕様を表現できる場合、冗長な not want のテストを残さないこと。not want は独立した失敗モードを防ぐときにだけ使うこと
+- 結合テストはcliパッケージの関数から行うこと
+- 結合のテストの際、副作用があるものに対してだけモックを用意すること
