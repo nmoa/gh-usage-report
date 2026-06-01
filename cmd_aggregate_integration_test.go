@@ -15,7 +15,7 @@ import (
 // TestAggregateCommand_RunByOrg は summarized CSV を org 単位に集計できることを検証します。
 func TestAggregateCommand_RunByOrg(t *testing.T) {
 	tmpDir := t.TempDir()
-	inputPath := filepath.Join(tmpDir, "GitHub_Usage_jp-ricoh_2026-04-01_to_2026-04-30_summarized.csv")
+	inputPath := filepath.Join(tmpDir, "GitHub_Usage_exmaple-enterprise_2026-04-01_to_2026-04-30_summarized.csv")
 	input := strings.Join([]string{
 		"date,product,sku,quantity,unit_type,applied_cost_per_quantity,gross_amount,discount_amount,net_amount,organization,repository,cost_center_name",
 		"2026-04-01,actions,actions_linux,10,minutes,0.006,12,2,10,org-a,repo-a,cc-1",
@@ -34,8 +34,8 @@ func TestAggregateCommand_RunByOrg(t *testing.T) {
 	err = cmd.ExecuteContext(context.Background())
 	require.NoError(t, err)
 
-	actionsPath := filepath.Join(tmpDir, "GitHub_Usage_jp-ricoh_2026-04-01_to_2026-04-30", "actions_by_org.csv")
-	copilotPath := filepath.Join(tmpDir, "GitHub_Usage_jp-ricoh_2026-04-01_to_2026-04-30", "copilot_by_org.csv")
+	actionsPath := filepath.Join(tmpDir, "GitHub_Usage_exmaple-enterprise_2026-04-01_to_2026-04-30", "actions_by_org.csv")
+	copilotPath := filepath.Join(tmpDir, "GitHub_Usage_exmaple-enterprise_2026-04-01_to_2026-04-30", "copilot_by_org.csv")
 	actionsContent, err := os.ReadFile(actionsPath)
 	require.NoError(t, err)
 	copilotContent, err := os.ReadFile(copilotPath)
@@ -57,10 +57,42 @@ func TestAggregateCommand_RunByOrg(t *testing.T) {
 	require.NotContains(t, stderr.String(), "レポート")
 }
 
+// TestAggregateCommand_RunByOrgSortedByName は sort-by name で org 名昇順に出力できることを検証します。
+func TestAggregateCommand_RunByOrgSortedByName(t *testing.T) {
+	tmpDir := t.TempDir()
+	inputPath := filepath.Join(tmpDir, "GitHub_Usage_exmaple-enterprise_2026-04-01_to_2026-04-30_summarized.csv")
+	input := strings.Join([]string{
+		"date,product,sku,quantity,unit_type,applied_cost_per_quantity,gross_amount,discount_amount,net_amount,organization,repository,cost_center_name",
+		"2026-04-01,actions,actions_linux,10,minutes,0.006,12,2,10,org-b,repo-a,cc-1",
+		"2026-04-01,actions,actions_linux,5,minutes,0.006,6,1,5,org-a,repo-b,cc-2",
+	}, "\n") + "\n"
+	err := os.WriteFile(inputPath, []byte(input), outputFilePermission)
+	require.NoError(t, err)
+
+	cmd := newRootCmdWithAggregateDependencies(commandDependencies{}, newDefaultAggregateDependencies())
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"aggregate", "--input", inputPath, "--group-by", "org", "--sort-by", "name", "--output-dir", tmpDir})
+
+	err = cmd.ExecuteContext(context.Background())
+	require.NoError(t, err)
+
+	actionsPath := filepath.Join(tmpDir, "GitHub_Usage_exmaple-enterprise_2026-04-01_to_2026-04-30", "actions_by_org.csv")
+	actionsContent, err := os.ReadFile(actionsPath)
+	require.NoError(t, err)
+
+	require.Equal(t, strings.Join([]string{
+		"org,gross_amount,discount_amount,net_amount,ratio",
+		"org-a,6,1,5,0.333333",
+		"org-b,12,2,10,0.666667",
+		"",
+	}, "\n"), string(actionsContent))
+}
+
 // TestAggregateCommand_RunByCostCenter は detailed CSV を cost_center 単位に集計できることを検証します。
 func TestAggregateCommand_RunByCostCenter(t *testing.T) {
 	tmpDir := t.TempDir()
-	inputPath := filepath.Join(tmpDir, "GitHub_Usage_jp-ricoh_2026-04-01_to_2026-04-30_detailed.csv")
+	inputPath := filepath.Join(tmpDir, "GitHub_Usage_exmaple-enterprise_2026-04-01_to_2026-04-30_detailed.csv")
 	input := strings.Join([]string{
 		"date,product,sku,quantity,unit_type,applied_cost_per_quantity,gross_amount,discount_amount,net_amount,username,organization,repository,workflow_path,cost_center_name",
 		"2026-04-01,actions,actions_linux,10,minutes,0.006,12,2,10,alice,org-a,repo-a,.github/workflows/ci.yml,cc-1",
@@ -77,7 +109,7 @@ func TestAggregateCommand_RunByCostCenter(t *testing.T) {
 	err = cmd.ExecuteContext(context.Background())
 	require.NoError(t, err)
 
-	actionsPath := filepath.Join(tmpDir, "GitHub_Usage_jp-ricoh_2026-04-01_to_2026-04-30", "actions_by_cost_center.csv")
+	actionsPath := filepath.Join(tmpDir, "GitHub_Usage_exmaple-enterprise_2026-04-01_to_2026-04-30", "actions_by_cost_center.csv")
 	actionsContent, err := os.ReadFile(actionsPath)
 	require.NoError(t, err)
 	require.Equal(t, strings.Join([]string{
@@ -91,7 +123,7 @@ func TestAggregateCommand_RunByCostCenter(t *testing.T) {
 // TestAggregateCommand_RunByUser は detailed CSV を user 単位に集計できることを検証します。
 func TestAggregateCommand_RunByUser(t *testing.T) {
 	tmpDir := t.TempDir()
-	inputPath := filepath.Join(tmpDir, "GitHub_Usage_jp-ricoh_2026-04-01_to_2026-04-30_detailed.csv")
+	inputPath := filepath.Join(tmpDir, "GitHub_Usage_exmaple-enterprise_2026-04-01_to_2026-04-30_detailed.csv")
 	input := strings.Join([]string{
 		"date,product,sku,quantity,unit_type,applied_cost_per_quantity,gross_amount,discount_amount,net_amount,username,organization,repository,workflow_path,cost_center_name",
 		"2026-04-01,actions,actions_linux,10,minutes,0.006,12,2,10,alice,org-a,repo-a,.github/workflows/ci.yml,cc-1",
@@ -110,8 +142,8 @@ func TestAggregateCommand_RunByUser(t *testing.T) {
 	err = cmd.ExecuteContext(context.Background())
 	require.NoError(t, err)
 
-	actionsPath := filepath.Join(tmpDir, "GitHub_Usage_jp-ricoh_2026-04-01_to_2026-04-30", "actions_by_user.csv")
-	copilotPath := filepath.Join(tmpDir, "GitHub_Usage_jp-ricoh_2026-04-01_to_2026-04-30", "copilot_by_user.csv")
+	actionsPath := filepath.Join(tmpDir, "GitHub_Usage_exmaple-enterprise_2026-04-01_to_2026-04-30", "actions_by_user.csv")
+	copilotPath := filepath.Join(tmpDir, "GitHub_Usage_exmaple-enterprise_2026-04-01_to_2026-04-30", "copilot_by_user.csv")
 	actionsContent, err := os.ReadFile(actionsPath)
 	require.NoError(t, err)
 	copilotContent, err := os.ReadFile(copilotPath)

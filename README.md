@@ -1,6 +1,6 @@
 # GH Billing Report
 
-`gh billing-report` downloads enterprise usage report CSV files from GitHub's [Usage Reports API](https://docs.github.com/en/enterprise-cloud@latest/rest/billing/usage-reports?apiVersion=2022-11-28) and can re-aggregate downloaded CSVs by organization, cost center, or user.
+`gh billing-report` downloads enterprise usage report CSV files from GitHub's [Usage Reports API](https://docs.github.com/en/enterprise-cloud@latest/rest/billing/usage-reports?apiVersion=2022-11-28) and can re-aggregate downloaded CSVs by organization, cost center, or user, ordered by net amount or name.
 
 This repository is a fork of [davelosert/gh-billing-report](https://github.com/davelosert/gh-billing-report).
 
@@ -9,7 +9,7 @@ This repository is a fork of [davelosert/gh-billing-report](https://github.com/d
 - Download `detailed`, `summarized`, or `both` usage report CSVs for an enterprise billing cycle.
 - Calculate the report date range from `--year`, `--month`, and `--billing-cycle`.
 - Poll GitHub's asynchronous export API and download every returned CSV file.
-- Re-aggregate an existing usage CSV into product-specific CSVs grouped by `org`, `cost_center`, or `user`.
+- Re-aggregate an existing usage CSV into product-specific CSVs grouped by `org`, `cost_center`, or `user`, sorted by `net_amount` or `name`.
 
 ## Installation
 
@@ -138,6 +138,12 @@ Use the `aggregate` subcommand to create product-specific summary CSVs from an e
 gh billing-report aggregate --input reports/GitHub_Usage_my-enterprise_2026-04-01_to_2026-04-30_summarized.csv --group-by org
 ```
 
+Sort by group name instead of net amount:
+
+```bash
+gh billing-report aggregate --input reports/GitHub_Usage_my-enterprise_2026-04-01_to_2026-04-30_summarized.csv --group-by org --sort-by name
+```
+
 Run from source:
 
 ```bash
@@ -150,6 +156,7 @@ go run . aggregate --input reports/GitHub_Usage_my-enterprise_2026-04-01_to_2026
 | --- | --- | --- |
 | `--input` | Input usage CSV file. | required |
 | `--group-by` | Grouping key: `org`, `cost_center`, or `user`. | required |
+| `--sort-by` | Row ordering: `net_amount` or `name`. | `net_amount` |
 | `--output-dir` | Parent directory for aggregate CSV output. | `.` |
 
 ### Aggregate behavior
@@ -157,6 +164,9 @@ go run . aggregate --input reports/GitHub_Usage_my-enterprise_2026-04-01_to_2026
 - `summarized` CSV files support `org` and `cost_center` grouping.
 - `detailed` CSV files support `org`, `cost_center`, and `user` grouping.
 - `--group-by user` fails for `summarized` CSV files because they do not contain a `username` column.
+- Rows are sorted by `net_amount` descending by default.
+- `--sort-by name` sorts rows by the aggregate key ascending.
+- Rows with the same `net_amount` fall back to the aggregate key so output stays deterministic.
 - Empty grouping values are emitted as `(unassigned)`.
 - `ratio` is the share of each row's `net_amount` within the total `net_amount` of the same product.
 

@@ -34,6 +34,14 @@ const (
 // aggregateGrouping は集計単位を表します。
 type aggregateGrouping string
 
+// aggregateSortBy は集計結果の並び順を表します。
+type aggregateSortBy string
+
+const (
+	aggregateSortByNetAmount aggregateSortBy = "net_amount"
+	aggregateSortByName      aggregateSortBy = "name"
+)
+
 // usageRecord は集計に必要な CSV 行データです。
 type usageRecord struct {
 	Product        string
@@ -244,10 +252,30 @@ func parseAggregateGrouping(value string) (aggregateGrouping, error) {
 	}
 }
 
-// aggregateUsageRecords は product ごとに指定単位の集計結果を返します。
+// parseAggregateSortBy は CLI 入力の並び順を正規化します。
+func parseAggregateSortBy(value string) (aggregateSortBy, error) {
+	switch strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), "-", "_")) {
+	case string(aggregateSortByNetAmount), "netamount":
+		return aggregateSortByNetAmount, nil
+	case string(aggregateSortByName):
+		return aggregateSortByName, nil
+	default:
+		return "", fmt.Errorf("--sort-by must be one of: net_amount, name")
+	}
+}
+
+// aggregateUsageRecords は product ごとに指定単位の集計結果を既定の並び順で返します。
 func aggregateUsageRecords(records []usageRecord, format usageCSVFormat, grouping aggregateGrouping) (map[string][]aggregateRow, error) {
+	return aggregateUsageRecordsWithSort(records, format, grouping, aggregateSortByNetAmount)
+}
+
+// aggregateUsageRecordsWithSort は product ごとに指定単位と並び順の集計結果を返します。
+func aggregateUsageRecordsWithSort(records []usageRecord, format usageCSVFormat, grouping aggregateGrouping, sortBy aggregateSortBy) (map[string][]aggregateRow, error) {
 	if grouping == aggregateGroupingUser && format != usageCSVFormatDetailed {
 		return nil, fmt.Errorf("--group-by user requires a detailed CSV with username column")
+	}
+	if sortBy != aggregateSortByNetAmount && sortBy != aggregateSortByName {
+		return nil, fmt.Errorf("--sort-by must be one of: net_amount, name")
 	}
 
 	type aggregateTotals struct {
@@ -292,17 +320,43 @@ func aggregateUsageRecords(records []usageRecord, format usageCSVFormat, groupin
 			})
 		}
 
-		sort.Slice(rows, func(left int, right int) bool {
-			if rows[left].NetAmount == rows[right].NetAmount {
-				return rows[left].Key < rows[right].Key
-			}
-			return rows[left].NetAmount > rows[right].NetAmount
-		})
+		sortAggregateRows(rows, sortBy)
 
 		result[product] = rows
 	}
 
 	return result, nil
+}
+
+// sortAggregateRows は指定の並び順で集計結果を並べ替えます。
+func sortAggregateRows(rows []aggregateRow, sortBy aggregateSortBy) {
+	sort.Slice(rows, func(left int, right int) bool {
+		return aggregateRowsLess(rows[left], rows[right], sortBy)
+	})
+}
+
+// aggregateRowsLess は 2 行の並び順を比較します。
+func aggregateRowsLess(left aggregateRow, right aggregateRow, sortBy aggregateSortBy) bool {
+	if sortBy == aggregateSortByName {
+		return aggregateRowsLessByName(left, right)
+	}
+	return aggregateRowsLessByNetAmount(left, right)
+}
+
+// aggregateRowsLessByNetAmount は net_amount 降順の並び順を比較します。
+func aggregateRowsLessByNetAmount(left aggregateRow, right aggregateRow) bool {
+	if left.NetAmount != right.NetAmount {
+		return left.NetAmount > right.NetAmount
+	}
+	return left.Key < right.Key
+}
+
+// aggregateRowsLessByName は集計キー昇順の並び順を比較します。
+func aggregateRowsLessByName(left aggregateRow, right aggregateRow) bool {
+	if left.Key != right.Key {
+		return left.Key < right.Key
+	}
+	return left.NetAmount > right.NetAmount
 }
 
 // groupValueForRecord は対象レコードから集計キーを取り出します。

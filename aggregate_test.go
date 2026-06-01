@@ -138,6 +138,29 @@ func TestAggregateUsageRecords_ZeroTotalNetAmount(t *testing.T) {
 	}, result["actions"])
 }
 
+// TestAggregateUsageRecordsWithSort_ByName は name 指定で集計キー昇順になることを検証します。
+func TestAggregateUsageRecordsWithSort_ByName(t *testing.T) {
+	records := []usageRecord{
+		{Product: "actions", GrossAmount: 12, DiscountAmount: 2, NetAmount: 10, Organization: "org-b"},
+		{Product: "actions", GrossAmount: 6, DiscountAmount: 1, NetAmount: 5, Organization: "org-a"},
+	}
+
+	defaultResult, err := aggregateUsageRecords(records, usageCSVFormatSummarized, aggregateGroupingOrg)
+	require.NoError(t, err)
+
+	nameSortedResult, err := aggregateUsageRecordsWithSort(records, usageCSVFormatSummarized, aggregateGroupingOrg, aggregateSortByName)
+	require.NoError(t, err)
+
+	require.Equal(t, []aggregateRow{
+		{Key: "org-b", GrossAmount: 12, DiscountAmount: 2, NetAmount: 10, Ratio: 10.0 / 15.0},
+		{Key: "org-a", GrossAmount: 6, DiscountAmount: 1, NetAmount: 5, Ratio: 5.0 / 15.0},
+	}, defaultResult["actions"])
+	require.Equal(t, []aggregateRow{
+		{Key: "org-a", GrossAmount: 6, DiscountAmount: 1, NetAmount: 5, Ratio: 5.0 / 15.0},
+		{Key: "org-b", GrossAmount: 12, DiscountAmount: 2, NetAmount: 10, Ratio: 10.0 / 15.0},
+	}, nameSortedResult["actions"])
+}
+
 // TestFormatAggregatedCSV は集計結果を CSV として出力できることを検証します。
 func TestFormatAggregatedCSV(t *testing.T) {
 	rows := []aggregateRow{
@@ -173,9 +196,26 @@ func TestParseAggregateGrouping_InvalidValue(t *testing.T) {
 	require.EqualError(t, err, "--group-by must be one of: org, cost_center, user")
 }
 
+// TestParseAggregateSortBy は許容する並び順を正規化できることを検証します。
+func TestParseAggregateSortBy(t *testing.T) {
+	sortBy, err := parseAggregateSortBy("name")
+
+	require.NoError(t, err)
+	require.Equal(t, aggregateSortByName, sortBy)
+}
+
+// TestParseAggregateSortBy_InvalidValue は不正な並び順を拒否することを検証します。
+func TestParseAggregateSortBy_InvalidValue(t *testing.T) {
+	sortBy, err := parseAggregateSortBy("ratio")
+
+	require.Error(t, err)
+	require.Equal(t, aggregateSortBy(""), sortBy)
+	require.EqualError(t, err, "--sort-by must be one of: net_amount, name")
+}
+
 // TestBuildAggregateOutputDirName は入力ファイル名から共通ディレクトリ名を作ることを検証します。
 func TestBuildAggregateOutputDirName(t *testing.T) {
-	result := buildAggregateOutputDirName("reports/GitHub_Usage_jp-ricoh_2026-04-01_to_2026-04-30_summarized.csv")
+	result := buildAggregateOutputDirName("reports/GitHub_Usage_exmaple-enterprise_2026-04-01_to_2026-04-30_summarized.csv")
 
-	require.Equal(t, "GitHub_Usage_jp-ricoh_2026-04-01_to_2026-04-30", result)
+	require.Equal(t, "GitHub_Usage_exmaple-enterprise_2026-04-01_to_2026-04-30", result)
 }

@@ -7,7 +7,7 @@ GitHub Enterprise の Usage Reports API を利用して、billing の usage repo
 ## 満たすべきフィーチャー
 
 - Usage Reports API を利用して enterprise の billing report CSV を取得できること
-- ダウンロード済みの Usage CSV を `org` `cost_center` `user` 単位で再集計できること
+- ダウンロード済みの Usage CSV を `org` `cost_center` `user` 単位で再集計し、`net_amount` または `name` で並び替えられること
 - 再集計結果を product ごとの CSV として出力できること
 - 対象期間を `--year` `--month` `--billing-cycle` から計算できること
 - `detailed` `summarized` `both` の各レポート種別を扱えること
@@ -26,7 +26,7 @@ GitHub Enterprise の Usage Reports API を利用して、billing の usage repo
 
 ```
 gh billing-report --enterprise <slug> [options]
-gh billing-report aggregate --input <path> --group-by <org|cost_center|user> [options]
+gh billing-report aggregate --input <path> --group-by <org|cost_center|user> [--sort-by <net_amount|name>] [options]
 ```
 
 ## CLIオプション
@@ -48,6 +48,9 @@ gh billing-report aggregate --input <path> --group-by <org|cost_center|user> [op
 
 - `summarized` CSV は `org` `cost_center` 集計に対応すること
 - `detailed` CSV は `org` `cost_center` `user` 集計に対応すること
+- 既定では `net_amount` 降順で出力すること
+- `--sort-by name` では集計キー昇順で出力すること
+- `net_amount` が同値の行は集計キーで比較し、出力順を決定的にすること
 - 出力ディレクトリは入力ファイル名から `_detailed` `_summarized` を除いた名前にすること
 - 出力ファイル名は `{product}_by_{grouping}.csv` 形式にすること
 
@@ -57,6 +60,7 @@ gh billing-report aggregate --input <path> --group-by <org|cost_center|user> [op
 |---|---|---|
 | `--input` | 入力 CSV ファイルパス (必須) | - |
 | `--group-by` | 集計単位 (`org`, `cost_center`, `user`) | - |
+| `--sort-by` | 出力行の並び順 (`net_amount`, `name`) | `net_amount` |
 | `--output-dir` | 集計 CSV の親ディレクトリ | `.` |
 
 ## 処理フロー

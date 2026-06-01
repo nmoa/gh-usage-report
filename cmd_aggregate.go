@@ -23,6 +23,7 @@ type aggregateCommandOptions struct {
 	inputPath string
 	outputDir string
 	grouping  aggregateGrouping
+	sortBy    aggregateSortBy
 }
 
 // newDefaultAggregateDependencies は aggregate サブコマンドの本番依存を構築します。
@@ -48,6 +49,7 @@ func newAggregateCmd(deps aggregateCommandDependencies) *cobra.Command {
 
 	cmd.Flags().String("input", "", "Input usage CSV file")
 	cmd.Flags().String("group-by", "", "Grouping: org, cost_center, or user")
+	cmd.Flags().String("sort-by", string(aggregateSortByNetAmount), "Row ordering: net_amount or name")
 	cmd.Flags().String("output-dir", ".", "Parent directory for aggregated CSV files")
 	_ = cmd.MarkFlagRequired("input")
 	_ = cmd.MarkFlagRequired("group-by")
@@ -79,7 +81,7 @@ func runAggregateCommand(cmd *cobra.Command, deps aggregateCommandDependencies) 
 		return fmt.Errorf("input CSV did not contain any data rows")
 	}
 
-	aggregatedRows, err := aggregateUsageRecords(records, format, options.grouping)
+	aggregatedRows, err := aggregateUsageRecordsWithSort(records, format, options.grouping, options.sortBy)
 	if err != nil {
 		return err
 	}
@@ -130,10 +132,19 @@ func readAggregateCommandOptions(cmd *cobra.Command) (aggregateCommandOptions, e
 	if err != nil {
 		return aggregateCommandOptions{}, err
 	}
+	sortByValue, err := cmd.Flags().GetString("sort-by")
+	if err != nil {
+		return aggregateCommandOptions{}, err
+	}
+	sortBy, err := parseAggregateSortBy(sortByValue)
+	if err != nil {
+		return aggregateCommandOptions{}, err
+	}
 
 	return aggregateCommandOptions{
 		inputPath: inputPath,
 		outputDir: outputDir,
 		grouping:  grouping,
+		sortBy:    sortBy,
 	}, nil
 }
