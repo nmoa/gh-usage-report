@@ -14,6 +14,10 @@ GitHub Enterprise の Usage Reports API を利用して、billing の usage repo
 - 完了待ちのポーリングと CSV ダウンロード進捗を CLI で表示できること
 - `.devcontainer/devcontainer.json` により Go 1.24 と GitHub CLI を含む開発環境をコンテナで起動できること
 - Dev Container 作成時に `go mod download` を実行し、依存取得済みの状態で作業を開始できること
+- vから始まる git タグがプッシュされた際に、GitHub Actions によってバイナリが自動ビルドされリリースされること
+- ビルドされた各プラットフォーム用バイナリに対して、セキュリティ担保のための Artifact Attestations（ビルド証明）が添付されること
+- リリースの自動作成時に、プルリクエストのラベル情報に基づいたリリースノートが自動生成されること
+
 
 ## 使用する API
 

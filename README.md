@@ -213,6 +213,21 @@ go run . --enterprise my-enterprise --year 2026 --month 4
 go run . aggregate --input reports/GitHub_Usage_my-enterprise_2026-04-01_to_2026-04-30_detailed.csv --group-by org
 ```
 
+## Releasing
+
+To release a new version of this extension:
+
+1. Merge your pull requests into `main`. Tag your pull requests with appropriate labels (such as `feature`, `bug`, `documentation`, `dependencies`, `chore`, `refactor`) to enable the automatic release notes generator to categorize changes.
+2. Push a new semantic version tag:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+3. The GitHub Actions release workflow will trigger automatically. It will:
+   - Build and cross-compile binaries for all supported platforms.
+   - Generate secure Artifact Attestations for the compiled binaries.
+   - Create a GitHub Release with automatically categorized release notes based on the configuration in `.github/release.yml`.
+
 ## License
 
 This project is licensed under the [MIT License](./LICENSE).
