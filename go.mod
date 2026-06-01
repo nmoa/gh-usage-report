@@ -1,12 +1,10 @@
 module github.com/nmoa/gh-usage-report
 
-go 1.24.0
-
-toolchain go1.24.2
+go 1.25.0
 
 require (
 	github.com/briandowns/spinner v1.23.2
-	github.com/cli/go-gh/v2 v2.12.2
+	github.com/cli/go-gh/v2 v2.13.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 )
